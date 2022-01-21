@@ -5,8 +5,8 @@
       "name": "myblob",
       "type": "blobTrigger",
       "direction": "in",
-      "path": "insights-logs-appservicehttplogs/{name}",
-      "connection": "aiopsv4_STORAGE"
+      "path": "insights-metrics-pt1m/{name}",
+      "connection": "aiopsdata_STORAGE"
     }
   ]
 }
