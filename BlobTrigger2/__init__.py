@@ -15,21 +15,22 @@ warnings.filterwarnings('ignore')
 # Import library to display results
 import matplotlib.pyplot as plt
 # %matplotlib inline 
-
 from bokeh.plotting import figure,output_notebook, show
 from bokeh.palettes import Blues4
 from bokeh.models import ColumnDataSource,Slider
+
 # import datetime
 from datetime import datetime
-
 from bokeh.io import push_notebook
 from dateutil import parser
 from ipywidgets import interact, widgets, fixed
+
 ls = []
 ls1 = []
 ls2 = []
-apikey = '639d4273d8ce41d5941f30428248fc4f' 
+apikey = 'f45143c46a574480a01fb58f1998017c' 
 endpoint = 'https://eastus.api.cognitive.microsoft.com/anomalydetector/v1.0/timeseries/entire/detect'
+
 def detect(endpoint, apikey, request_data):
     headers = {'Content-Type': 'application/json', 'Ocp-Apim-Subscription-Key': apikey}
     response = requests.post(endpoint, data=json.dumps(request_data), headers=headers)
@@ -83,44 +84,56 @@ def main(myblob: func.InputStream):
                  f"Name: {myblob.name}\n"
                  f"Blob Size: {myblob.length} bytes")
     
-    # logging.info(str(myblob.read()))
-    # var = str(myblob.read())
     var = myblob.read()
+    
     var = var.decode("utf-8") 
-    # var = var.split('}')
-    ls.append(var)
-    var = ls[0]
-    var = var.split('\n') # creates all the logs
-    print(json.loads(var[0])['time'])
-    # ls = []
-    # var = json.loads(json.loads(i)['properties'])['CsBytes'] # dict within a dict, first properties indexed converted to a dict then the metric CsBytes extracted
-    # print(json.loads(json.loads(var[0])['properties'])['CsBytes'])
-    print(len(var))
+    var = var.split('\r\n')
+    #print(var)
+    #ls.append(var)
+    var_temp = []
+    i=0
+    while i < len(var):
+        temp =json.loads(var[i])
+        if temp["metricName"] == "CpuTime":
+            var_temp.append(json.loads(var[i]))
+        #time = var_temp[i]["time"]
+        #time = time[0:18]
+        #var_temp[i]["time"]= time
+        if i == len(var)-2:
+           break
+        i+=1
+    for k in var_temp:
+        print(k["time"])
+
+    
+    sorted(var_temp, key=lambda var_temp:var_temp["time"])
+    #print(var_temp)
+
+
+    #print(len(var))
     ls1 = []
     i = 0
 
-    while i < len(var):
-
-        # print(i)
-        if i> 1 and str(json.loads(var[i])['time']) != str(json.loads(var[i-1])['time']):
-            ls1.append(int(json.loads(json.loads(var[i])['properties'])['CsBytes']))
-            ls2.append(str(json.loads(var[i])['time']))
-        if i == len(var)-2:
+    while i < len(var_temp):
+        if i> 1 and str(var_temp[i]['time']) != str(var_temp[i-1]['time']):
+            ls1.append(float(var_temp[i]['average']))
+            ls2.append(str(var_temp[i]['time']))
+        if i == len(var_temp)-2:
             break
         i+=1
-        # if i == None:
-            # ls1.append(json.loads(json.loads(i)['properties'])['CsBytes'])
-    
+    #print(ls1)
     sample_data = {'granularity':'secondly'}
     sample_data['series'] = []
     prev = None
-    for i in range(0,len(ls1)):
-        v =  datetime.fromisoformat(ls2[i])
+    #print(ls2[0])
+    for i in range(0,len(ls1)):    
+        newstring = ls2[i][0:18]+'Z'
+        v = datetime.strptime(newstring, '%Y-%m-%dT%H:%M:%SZ')
         v = v.strftime("%d/%m/%Y %H:%M:%S")
+        #print(v)
         if i > 0 and str(v) != prev:
             sample_data['series'].append({'timestamp':str(v), 'value':ls1[i] })
         prev = str(v)
-    # print(len(ls1))
-    print(sample_data)
-
+    
+    #print(sample_data)
     build_figure(sample_data,95)
