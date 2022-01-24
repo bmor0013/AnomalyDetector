@@ -40,7 +40,10 @@ def detect(endpoint, apikey, request_data):
         raise Exception(response.text)
 
 
-def build_figure(sample_data, sensitivity):
+def build_figure(sample_data, sensitivity,target):
+
+
+
     sample_data['sensitivity'] = sensitivity
     # print(sample_data)
     result = detect(endpoint, apikey, sample_data)
@@ -65,6 +68,16 @@ def build_figure(sample_data, sensitivity):
             anomaly_labels.append(label[index])
             anomaly_indexes.append(index)
         index = index+1
+    
+    print(anomalies)
+    print(anomaly_labels)
+    print(anomaly_indexes)
+
+
+
+    target["data"]["anomalies"] = anomalies
+    target["data"]["anomaly_labels"] = anomaly_labels
+    target["data"]["anomaly_indexes"] = anomaly_indexes  
     upperband = response['expectedValues'] + response['upperMargins']
     lowerband = response['expectedValues'] -response['lowerMargins']
     band_x = np.append(label, label[::-1])
@@ -77,25 +90,20 @@ def build_figure(sample_data, sensitivity):
     p.legend.border_line_width = 1
     p.legend.background_fill_alpha  = 0.1
     show(p, notebook_handle=True)
-
+    return target
 def main(myblob: func.InputStream):
     logging.info(f"Python blob trigger function processed blob \n"
                  f"Name: {myblob.name}\n"
                  f"Blob Size: {myblob.length} bytes")
-    
-    # logging.info(str(myblob.read()))
-    # var = str(myblob.read())
+
     var = myblob.read()
     var = var.decode("utf-8") 
-    # var = var.split('}')
+    
     ls.append(var)
     var = ls[0]
     var = var.split('\n') # creates all the logs
-    print(json.loads(var[0])['time'])
-    # ls = []
-    # var = json.loads(json.loads(i)['properties'])['CsBytes'] # dict within a dict, first properties indexed converted to a dict then the metric CsBytes extracted
-    # print(json.loads(json.loads(var[0])['properties'])['CsBytes'])
-    print(len(var))
+    # print(json.loads(var[0])['time'])
+    
     ls1 = []
     i = 0
 
@@ -121,6 +129,22 @@ def main(myblob: func.InputStream):
             sample_data['series'].append({'timestamp':str(v), 'value':ls1[i] })
         prev = str(v)
     # print(len(ls1))
-    print(sample_data)
+    target = {
+    "name":"insights-logs-appservicehttplogs",
+    "data": 
+        {"anomalies":[],
+        "anomaly_labels" : [],
+        "anomaly_indexes" : []
+        }
+    }
 
-    build_figure(sample_data,95)
+    # print(sample_data)
+
+    
+    
+    target = build_figure(sample_data,95,target)
+    url = "https://aiopsendpoint.azurewebsites.net/"#"http://192.168.68.107:5000/"#"https://aiopsendpoint.azurewebsites.net/"
+    # response = requests.post(url, target)
+    response = requests.post(url, json.dumps(target))
+
+    print(response)
