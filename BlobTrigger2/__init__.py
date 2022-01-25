@@ -41,43 +41,50 @@ def detect(endpoint, apikey, request_data):
         raise Exception(response.text)
 
 
-def build_figure(sample_data, sensitivity):
-    sample_data['sensitivity'] = sensitivity
-    # print(sample_data)
-    result = detect(endpoint, apikey, sample_data)
-    # print(result)
-    columns = {'expectedValues': result['expectedValues'], 'isAnomaly': result['isAnomaly'], 'isNegativeAnomaly': result['isNegativeAnomaly'],
-          'isPositiveAnomaly': result['isPositiveAnomaly'], 'upperMargins': result['upperMargins'], 'lowerMargins': result['lowerMargins'],
-          'timestamp': [parser.parse(x['timestamp']) for x in sample_data['series']], 
-          'value': [x['value'] for x in sample_data['series']]}
-    response = pd.DataFrame(data=columns)
-    # print(response)
-    values = response['value']
-    label = response['timestamp']
-    anomalies = []
-    anomaly_labels = []
-    index = 0
-    anomaly_indexes = []
-    p = figure(x_axis_type='datetime', title="Batch Anomaly Detection ({0} Sensitvity)".format(sensitivity), width=800, height=600)
-    for anom in response['isAnomaly']:
-        if anom == True and (float(values[index]) > response.iloc[index]['expectedValues'] + response.iloc[index]['upperMargins'] or 
-                         float(values[index]) < response.iloc[index]['expectedValues'] - response.iloc[index]['lowerMargins']):
-            anomalies.append(float(values[index]))
-            anomaly_labels.append(label[index])
-            anomaly_indexes.append(index)
-        index = index+1
-    upperband = response['expectedValues'] + response['upperMargins']
-    lowerband = response['expectedValues'] -response['lowerMargins']
-    band_x = np.append(label, label[::-1])
-    band_y = np.append(lowerband, upperband[::-1])
-    boundary = p.patch(band_x, band_y, color=Blues4[2], fill_alpha=0.5, line_width=1, legend='Boundary')
-    p.line(label, values, legend='Value', color="#2222aa", line_width=1)
-    p.line(label, response['expectedValues'], legend='ExpectedValue',  line_width=1, line_dash="dotdash", line_color='olivedrab')
-    anom_source = ColumnDataSource(dict(x=anomaly_labels, y=anomalies))
-    anoms = p.circle('x', 'y', size=5, color='tomato', source=anom_source)
-    p.legend.border_line_width = 1
-    p.legend.background_fill_alpha  = 0.1
-    show(p, notebook_handle=True)
+def build_figure(sample_data, sensitivity,target):
+  sample_data['sensitivity'] = sensitivity
+  # print(sample_data)
+  result = detect(endpoint, apikey, sample_data)
+  # print(result)
+  columns = {'expectedValues': result['expectedValues'], 'isAnomaly': result['isAnomaly'], 'isNegativeAnomaly': result['isNegativeAnomaly'],
+     'isPositiveAnomaly': result['isPositiveAnomaly'], 'upperMargins': result['upperMargins'], 'lowerMargins': result['lowerMargins'],
+     'timestamp': [parser.parse(x['timestamp']) for x in sample_data['series']],
+     'value': [x['value'] for x in sample_data['series']]}
+  response = pd.DataFrame(data=columns)
+  # print(response)
+  values = response['value']
+  label = response['timestamp']
+  anomalies = []
+  anomaly_labels = []
+  index = 0
+  anomaly_indexes = []
+  p = figure(x_axis_type='datetime', title="Batch Anomaly Detection ({0} Sensitvity)".format(sensitivity), width=800, height=600)
+  for anom in response['isAnomaly']:
+    if anom == True and (float(values[index]) > response.iloc[index]['expectedValues'] + response.iloc[index]['upperMargins'] or
+             float(values[index]) < response.iloc[index]['expectedValues'] - response.iloc[index]['lowerMargins']):
+      anomalies.append(float(values[index]))
+      anomaly_labels.append(label[index])
+      anomaly_indexes.append(index)
+    index = index+1
+  print(anomalies)
+  print(anomaly_labels)
+  print(anomaly_indexes)
+  target["data"]["anomalies"] = anomalies
+  target["data"]["anomaly_labels"] = anomaly_labels
+  target["data"]["anomaly_indexes"] = anomaly_indexes 
+  upperband = response['expectedValues'] + response['upperMargins']
+  lowerband = response['expectedValues'] -response['lowerMargins']
+  band_x = np.append(label, label[::-1])
+  band_y = np.append(lowerband, upperband[::-1])
+  boundary = p.patch(band_x, band_y, color=Blues4[2], fill_alpha=0.5, line_width=1, legend='Boundary')
+  p.line(label, values, legend='Value', color="#2222AA", line_width=1)
+  p.line(label, response['expectedValues'], legend='ExpectedValue', line_width=1, line_dash="dotdash", line_color='olivedrab')
+  anom_source = ColumnDataSource(dict(x=anomaly_labels, y=anomalies))
+  anoms = p.circle('x', 'y', size=5, color='tomato', source=anom_source)
+  p.legend.border_line_width = 1
+  p.legend.background_fill_alpha = 0.1
+  show(p, notebook_handle=True)
+  return target
 
 def main(myblob: func.InputStream):
     logging.info(f"Python blob trigger function processed blob \n"
@@ -134,6 +141,20 @@ def main(myblob: func.InputStream):
         if i > 0 and str(v) != prev:
             sample_data['series'].append({'timestamp':str(v), 'value':ls1[i] })
         prev = str(v)
+
+    target = {
+    "name":"insights-metrics-pt1m",
+    "data":
+    {"anomalies":[],
+    "anomaly_labels" : [],
+    "anomaly_indexes" : []
+    }
+  }
     
     #print(sample_data)
-    build_figure(sample_data,95)
+    #build_figure(sample_data,95)
+    target = build_figure(sample_data,95,target)
+    url = "https://aiopsendpoint.azurewebsites.net/"
+    response = requests.post(url, target)
+    print(response)
+    
