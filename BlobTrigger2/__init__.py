@@ -1,3 +1,4 @@
+from cgitb import reset
 import enum
 import logging
 import http.client, urllib.request, urllib.parse, urllib.error, base64
@@ -25,9 +26,9 @@ from datetime import datetime
 from bokeh.io import push_notebook
 from dateutil import parser
 from ipywidgets import interact, widgets, fixed
-ls = []
-ls1 = []
-ls2 = []
+# ls = []
+# ls1 = []
+# ls2 = []
 apikey = '639d4273d8ce41d5941f30428248fc4f' 
 endpoint = 'https://eastus.api.cognitive.microsoft.com/anomalydetector/v1.0/timeseries/entire/detect'
 def detect(endpoint, apikey, request_data):
@@ -69,15 +70,14 @@ def build_figure(sample_data, sensitivity,target):
             anomaly_indexes.append(index)
         index = index+1
     
-    print(anomalies)
-    print(anomaly_labels)
-    print(anomaly_indexes)
 
 
-
-    target["data"]["anomalies"] = anomalies
-    target["data"]["anomaly_labels"] = anomaly_labels
-    target["data"]["anomaly_indexes"] = anomaly_indexes  
+    target["anomalies"] = anomalies
+    anomaly_labels_copy = []
+    for i in anomaly_labels:
+        anomaly_labels_copy.append(i.strftime("%d/%m/%Y %H:%M:%S"))
+    target["anomaly_labels"] = anomaly_labels_copy
+    target["anomaly_indexes"] = anomaly_indexes  
     upperband = response['expectedValues'] + response['upperMargins']
     lowerband = response['expectedValues'] -response['lowerMargins']
     band_x = np.append(label, label[::-1])
@@ -98,51 +98,73 @@ def main(myblob: func.InputStream):
 
     var = myblob.read()
     var = var.decode("utf-8") 
-    
+    ls = []
     ls.append(var)
     var = ls[0]
     var = var.split('\n') # creates all the logs
-    # print(json.loads(var[0])['time'])
-    
-    ls1 = []
-    i = 0
 
-    while i < len(var):
 
-        # print(i)
-        if i> 1 and str(json.loads(var[i])['time']) != str(json.loads(var[i-1])['time']):
-            ls1.append(int(json.loads(json.loads(var[i])['properties'])['CsBytes']))
-            ls2.append(str(json.loads(var[i])['time']))
-        if i == len(var)-2:
-            break
-        i+=1
-        # if i == None:
-            # ls1.append(json.loads(json.loads(i)['properties'])['CsBytes'])
+    metrics = ["CsBytes","ScStatus","TimeTaken"]
+    metric_ls = []
+
+    for metric in metrics:
+        i = 0
+        ls1 = []
+        ls2 = []
+        while i < len(var):
+            # print(i)
+            if i> 1 and str(json.loads(var[i])['time']) != str(json.loads(var[i-1])['time']):
+                ls1.append(int(json.loads(json.loads(var[i])['properties'])[metric]))
+                ls2.append(str(json.loads(var[i])['time']))
+            if i == len(var)-2:
+                break
+            i+=1
+        metric_ls.append({"name": metric, "time" : ls2, "values" : ls1 })
     
-    sample_data = {'granularity':'secondly'}
-    sample_data['series'] = []
-    prev = None
-    for i in range(0,len(ls1)):
-        v =  datetime.fromisoformat(ls2[i])
-        v = v.strftime("%d/%m/%Y %H:%M:%S")
-        if i > 0 and str(v) != prev:
-            sample_data['series'].append({'timestamp':str(v), 'value':ls1[i] })
-        prev = str(v)
+
+    metric_ls_2 = []
+    for metric in metric_ls:
+        sample_data = {'granularity':'secondly'}
+        sample_data['series'] = []
+        prev = None
+        for i in range(0,len(metric["values"])):
+            v =  datetime.fromisoformat(metric["time"][i])
+            v = v.strftime("%d/%m/%Y %H:%M:%S")
+            if i > 0 and str(v) != prev:
+                sample_data['series'].append({'timestamp':str(v), 'value':metric["values"][i] })
+            prev = str(v)
+        metric_ls_2.append(sample_data)
+
+
     # print(len(ls1))
-    target = {
-    "name":"insights-logs-appservicehttplogs",
-    "data": 
-        {"anomalies":[],
-        "anomaly_labels" : [],
-        "anomaly_indexes" : []
-        }
-    }
+    # target = {
+    # "name":"insights-logs-appservicehttplogs",
+    # "data": 
+    #     {"anomalies":[],
+    #     "anomaly_labels" : [],
+    #     "anomaly_indexes" : []
+    #     }
+    # }
 
     # print(sample_data)
+    target = {
+        "name":"insights-logs-appservicehttplogs",
+        "data" : []
+    }    
+    for i in range(0, len(metric_ls_2)):
+        obj = {
+            "anomalies":[],
+            "anomaly_labels": [],
+            "anomaly_indexes" : []
+        }
+        result = build_figure(metric_ls_2[i],95,obj)
+        target["data"].append({
+            "metricName" : metrics[i],
+            "anomalies" : result
+            }            
+        )
+    print(target)
 
-    
-    
-    target = build_figure(sample_data,95,target)
     url = "https://aiopsendpoint.azurewebsites.net/"#"http://192.168.68.107:5000/"#"https://aiopsendpoint.azurewebsites.net/"
     # response = requests.post(url, target)
     response = requests.post(url, json.dumps(target))
