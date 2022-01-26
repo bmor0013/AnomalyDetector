@@ -25,9 +25,7 @@ from bokeh.io import push_notebook
 from dateutil import parser
 from ipywidgets import interact, widgets, fixed
 
-ls = []
-ls1 = []
-ls2 = []
+
 apikey = 'f45143c46a574480a01fb58f1998017c' 
 endpoint = 'https://eastus.api.cognitive.microsoft.com/anomalydetector/v1.0/timeseries/entire/detect'
 
@@ -66,12 +64,17 @@ def build_figure(sample_data, sensitivity,target):
       anomaly_labels.append(label[index])
       anomaly_indexes.append(index)
     index = index+1
-  print(anomalies)
-  print(anomaly_labels)
-  print(anomaly_indexes)
-  target["data"]["anomalies"] = anomalies
-  target["data"]["anomaly_labels"] = anomaly_labels
-  target["data"]["anomaly_indexes"] = anomaly_indexes 
+#   print(anomalies)
+#   print(anomaly_labels)
+#   print(anomaly_indexes)
+  target["anomalies"] = anomalies
+  anomaly_labels_copy = []
+  for i in anomaly_labels:
+      anomaly_labels_copy.append(i.strftime("%d/%m/%Y %H:%M:%S"))
+  target["anomaly_labels"] = anomaly_labels_copy
+  target["anomaly_indexes"] = anomaly_indexes
+
+
   upperband = response['expectedValues'] + response['upperMargins']
   lowerband = response['expectedValues'] -response['lowerMargins']
   band_x = np.append(label, label[::-1])
@@ -95,66 +98,103 @@ def main(myblob: func.InputStream):
     
     var = var.decode("utf-8") 
     var = var.split('\r\n')
-    #print(var)
-    #ls.append(var)
-    var_temp = []
-    i=0
-    while i < len(var):
-        temp =json.loads(var[i])
-        if temp["metricName"] == "CpuTime":
-            var_temp.append(json.loads(var[i]))
-        #time = var_temp[i]["time"]
-        #time = time[0:18]
-        #var_temp[i]["time"]= time
-        if i == len(var)-2:
-           break
-        i+=1
-    for k in var_temp:
-        print(k["time"])
+    ls = []
+
+    metrics = ["CpuTime","BytesSent","HttpResponseTime"]
+    metric_ls = []
+
+    for metric in metrics:
+        var_temp = []
+        i=0
+        while i < len(var):
+            temp =json.loads(var[i])
+            if temp["metricName"] == metric:
+                var_temp.append(json.loads(var[i])) # values of CPU Time
+            #time = var_temp[i]["time"]
+            #time = time[0:18]
+            #var_temp[i]["time"]= time
+            if i == len(var)-2:
+                break
+            i+=1
+        metric_ls.append({
+            "name" : metric,
+            "json" : var_temp
+        })
+    
 
     
-    sorted(var_temp, key=lambda var_temp:var_temp["time"])
+    # sorted(var_temp, key=lambda var_temp:var_temp["time"])
     #print(var_temp)
 
 
     #print(len(var))
-    ls1 = []
-    i = 0
 
-    while i < len(var_temp):
-        if i> 1 and str(var_temp[i]['time']) != str(var_temp[i-1]['time']):
-            ls1.append(float(var_temp[i]['average']))
-            ls2.append(str(var_temp[i]['time']))
-        if i == len(var_temp)-2:
-            break
-        i+=1
-    #print(ls1)
-    sample_data = {'granularity':'secondly'}
-    sample_data['series'] = []
-    prev = None
-    #print(ls2[0])
-    for i in range(0,len(ls1)):    
-        newstring = ls2[i][0:18]+'Z'
-        v = datetime.strptime(newstring, '%Y-%m-%dT%H:%M:%SZ')
-        v = v.strftime("%d/%m/%Y %H:%M:%S")
-        #print(v)
-        if i > 0 and str(v) != prev:
-            sample_data['series'].append({'timestamp':str(v), 'value':ls1[i] })
-        prev = str(v)
+    metric_ls_1 = []
+    for metric in metric_ls:
 
+        ls1 = []
+        ls2 = []
+        i = 0
+
+        while i < len(metric["json"]):
+            if i> 1 and str(metric["json"][i]['time']) != str(metric["json"][i-1]['time']):
+                ls1.append(float(metric["json"][i]['average']))
+                ls2.append(str(metric["json"][i]['time']))
+            if i == len(metric["json"])-2:
+                break
+            i+=1
+        metric_ls_1.append({"name": metric["name"], "time" : ls2, "values" : ls1 })
+    
+    
+    metric_ls_2 = []
+    for metric in metric_ls_1:
+        sample_data = {'granularity':'secondly'}
+        sample_data['series'] = []
+        prev = None
+        for i in range(0,len(metric["values"])):
+            newstring = ls2[i][0:18]+'Z'
+            v = datetime.strptime(newstring, '%Y-%m-%dT%H:%M:%SZ')
+            v = v.strftime("%d/%m/%Y %H:%M:%S")
+            # v =  datetime.fromisoformat(metric["time"][i])
+            # v = v.strftime("%d/%m/%Y %H:%M:%S")
+            if i > 0 and str(v) != prev:
+                sample_data['series'].append({'timestamp':str(v), 'value':metric["values"][i] })
+            prev = str(v)
+        metric_ls_2.append(sample_data)
+
+
+    # print(len(ls1))
+    # target = {
+    # "name":"insights-logs-appservicehttplogs",
+    # "data": 
+    #     {"anomalies":[],
+    #     "anomaly_labels" : [],
+    #     "anomaly_indexes" : []
+    #     }
+    # }
+
+    # print(sample_data)
     target = {
-    "name":"insights-metrics-pt1m",
-    "data":
-    {"anomalies":[],
-    "anomaly_labels" : [],
-    "anomaly_indexes" : []
-    }
-  }
-    
-    #print(sample_data)
-    #build_figure(sample_data,95)
-    target = build_figure(sample_data,95,target)
-    url = "https://aiopsendpoint.azurewebsites.net/"
-    response = requests.post(url, target)
+        "name":"insights-metrics-pt1m",
+        "data" : []
+    }    
+    for i in range(0, len(metric_ls_2)):
+        obj = {
+            "anomalies":[],
+            "anomaly_labels": [],
+            "anomaly_indexes" : []
+        }
+        result = build_figure(metric_ls_2[i],95,obj)
+        target["data"].append({
+            "metricName" : metrics[i],
+            "anomalies" : result
+            }            
+        )
+    print(target)
+
+    url = "https://aiopsendpoint.azurewebsites.net/"#"http://192.168.68.107:5000/"#"https://aiopsendpoint.azurewebsites.net/"
+    # response = requests.post(url, target)
+    response = requests.post(url, json.dumps(target))
+
     print(response)
-    
+
