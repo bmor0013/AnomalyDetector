@@ -1,4 +1,5 @@
 import enum
+from datetime import datetime, timedelta
 import logging
 import http.client, urllib.request, urllib.parse, urllib.error, base64
 from random import sample
@@ -26,9 +27,10 @@ from dateutil import parser
 from ipywidgets import interact, widgets, fixed
 
 
-apikey = 'f45143c46a574480a01fb58f1998017c' 
+apikey = '34442f5a16554d4eb8a6761c867d2f5a' 
 endpoint = 'https://eastus.api.cognitive.microsoft.com/anomalydetector/v1.0/timeseries/entire/detect'
-
+current_values = []
+last_upload = None
 def detect(endpoint, apikey, request_data):
     headers = {'Content-Type': 'application/json', 'Ocp-Apim-Subscription-Key': apikey}
     response = requests.post(endpoint, data=json.dumps(request_data), headers=headers)
@@ -89,13 +91,14 @@ def build_figure(sample_data, sensitivity,target):
   show(p, notebook_handle=True)
   return target
 
+
+
 def main(myblob: func.InputStream):
     logging.info(f"Python blob trigger function processed blob \n"
                  f"Name: {myblob.name}\n"
                  f"Blob Size: {myblob.length} bytes")
     
     var = myblob.read()
-    
     var = var.decode("utf-8") 
     var = var.split('\r\n')
     ls = []
@@ -125,8 +128,6 @@ def main(myblob: func.InputStream):
     
     # sorted(var_temp, key=lambda var_temp:var_temp["time"])
     #print(var_temp)
-
-
     #print(len(var))
 
     metric_ls_1 = []
@@ -163,38 +164,32 @@ def main(myblob: func.InputStream):
         metric_ls_2.append(sample_data)
 
 
-    # print(len(ls1))
-    # target = {
-    # "name":"insights-logs-appservicehttplogs",
-    # "data": 
-    #     {"anomalies":[],
-    #     "anomaly_labels" : [],
-    #     "anomaly_indexes" : []
-    #     }
-    # }
+    current_values.append(metric_ls_2)
+    past = datetime.now() - timedelta(days=1)
+    global last_upload
 
-    # print(sample_data)
-    target = {
-        "name":"insights-metrics-pt1m",
-        "data" : []
-    }    
-    for i in range(0, len(metric_ls_2)):
-        obj = {
-            "anomalies":[],
-            "anomaly_labels": [],
-            "anomaly_indexes" : []
-        }
-        result = build_figure(metric_ls_2[i],95,obj)
-        target["data"].append({
-            "metricName" : metrics[i],
-            "anomalies" : result
-            }            
-        )
-    print(target)
+    if past > last_upload:
 
-    url = "https://aiopsendpoint.azurewebsites.net/"#"http://192.168.68.107:5000/"#"https://aiopsendpoint.azurewebsites.net/"
-    # response = requests.post(url, target)
-    response = requests.post(url, json.dumps(target))
+        target = {
+            "name":"insights-metrics-pt1m",
+            "data" : []
+        }    
+        for i in range(0, len(metric_ls_2)):
+            obj = {
+                "anomalies":[],
+                "anomaly_labels": [],
+                "anomaly_indexes" : []
+            }
+            result = build_figure(metric_ls_2[i],95,obj)
+            target["data"].append({
+                "metricName" : metrics[i],
+                "anomalies" : result
+                }            
+            )
 
-    print(response)
+        url = "https://aiopsendpoint.azurewebsites.net/"#"http://192.168.68.107:5000/"#"https://aiopsendpoint.azurewebsites.net/"
+        # response = requests.post(url, target)
+        response = requests.post(url, json.dumps(target))
+        last_upload = datetime.now()
+
 
