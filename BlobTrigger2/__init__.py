@@ -124,7 +124,6 @@ def main(myblob: func.InputStream):
             "json" : var_temp
         })
     
-
     
     # sorted(var_temp, key=lambda var_temp:var_temp["time"])
     #print(var_temp)
@@ -167,6 +166,7 @@ def main(myblob: func.InputStream):
     current_values.append(metric_ls_2)
     past = datetime.now() - timedelta(days=1)
     global last_upload
+    global current_values
 
     if past > last_upload:
 
@@ -174,13 +174,13 @@ def main(myblob: func.InputStream):
             "name":"insights-metrics-pt1m",
             "data" : []
         }    
-        for i in range(0, len(metric_ls_2)):
+        for i in range(0, len(current_values)):
             obj = {
                 "anomalies":[],
                 "anomaly_labels": [],
                 "anomaly_indexes" : []
             }
-            result = build_figure(metric_ls_2[i],95,obj)
+            result = build_figure(current_values[i],95,obj)
             target["data"].append({
                 "metricName" : metrics[i],
                 "anomalies" : result
@@ -191,6 +191,5 @@ def main(myblob: func.InputStream):
         # response = requests.post(url, target)
         response = requests.post(url, json.dumps(target))
         last_upload = datetime.now()
-
 
 
