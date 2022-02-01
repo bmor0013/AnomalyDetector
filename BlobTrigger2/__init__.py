@@ -2,6 +2,7 @@ from cgitb import reset
 import enum
 import logging
 import http.client, urllib.request, urllib.parse, urllib.error, base64
+from time import time
 from random import sample
 # import azure.functions as func
 import json
@@ -11,6 +12,8 @@ import json
 import pandas as pd
 import numpy as np
 import warnings
+from datetime import datetime, timedelta
+
 warnings.filterwarnings('ignore')
 
 # Import library to display results
@@ -23,6 +26,7 @@ from bokeh.models import ColumnDataSource,Slider
 # import datetime
 from datetime import datetime
 
+
 from bokeh.io import push_notebook
 from dateutil import parser
 from ipywidgets import interact, widgets, fixed
@@ -31,6 +35,18 @@ from ipywidgets import interact, widgets, fixed
 # ls2 = []
 apikey = '639d4273d8ce41d5941f30428248fc4f' 
 endpoint = 'https://eastus.api.cognitive.microsoft.com/anomalydetector/v1.0/timeseries/entire/detect'
+
+
+current_values = []
+last_upload =  None
+
+
+current_values = []
+last_upload = datetime.now() 
+
+
+
+
 def detect(endpoint, apikey, request_data):
     headers = {'Content-Type': 'application/json', 'Ocp-Apim-Subscription-Key': apikey}
     response = requests.post(endpoint, data=json.dumps(request_data), headers=headers)
@@ -147,26 +163,57 @@ def main(myblob: func.InputStream):
     # }
 
     # print(sample_data)
-    target = {
-        "name":"insights-logs-appservicehttplogs",
-        "data" : []
-    }    
-    for i in range(0, len(metric_ls_2)):
-        obj = {
-            "anomalies":[],
-            "anomaly_labels": [],
-            "anomaly_indexes" : []
-        }
-        result = build_figure(metric_ls_2[i],95,obj)
-        target["data"].append({
-            "metricName" : metrics[i],
-            "anomalies" : result
-            }            
-        )
-    print(target)
+    current = datetime.now()
+    global last_upload
 
-    url = "https://aiopsendpoint.azurewebsites.net/"#"http://192.168.68.107:5000/"#"https://aiopsendpoint.azurewebsites.net/"
-    # response = requests.post(url, target)
-    response = requests.post(url, json.dumps(target))
+    if current - timedelta(minutes = 5) >= last_upload:
+        target = {
+            "name":"insights-logs-appservicehttplogs",
+            "data" : []
+        }    
+        for i in range(0, len(metric_ls_2)):
+            obj = {
+                "anomalies":[],
+                "anomaly_labels": [],
+                "anomaly_indexes" : []
+            }
+            result = build_figure(metric_ls_2[i],95,obj)
+            target["data"].append({
+                "metricName" : metrics[i],
+                "anomalies" : result
+                }            
+            )
+        print(target)
 
-    print(response)
+        url = "http://192.168.68.107:5000/"#"http://192.168.68.107:5000/"#"https://aiopsendpoint.azurewebsites.net/"
+        # response = requests.post(url, target)
+        response = requests.post(url, json.dumps(target))
+        last_upload = current
+        print(response)
+    # current_values.append(metric_ls_2)
+    # past = datetime.now() - timedelta(days=1)
+    # global last_upload
+
+    # if past > last_upload:
+
+    #     target = {
+    #         "name":"insights-metrics-pt1m",
+    #         "data" : []
+    #     }    
+    #     for i in range(0, len(metric_ls_2)):
+    #         obj = {
+    #             "anomalies":[],
+    #             "anomaly_labels": [],
+    #             "anomaly_indexes" : []
+    #         }
+    #         result = build_figure(metric_ls_2[i],95,obj)
+    #         target["data"].append({
+    #             "metricName" : metrics[i],
+    #             "anomalies" : result
+    #             }            
+    #         )
+
+    #     url = "https://aiopsendpoint.azurewebsites.net/"#"http://192.168.68.107:5000/"#"https://aiopsendpoint.azurewebsites.net/"
+    #     # response = requests.post(url, target)
+    #     response = requests.post(url, json.dumps(target))
+    #     last_upload = datetime.now()
