@@ -1,5 +1,4 @@
 import enum
-from datetime import datetime, timedelta
 import logging
 import http.client, urllib.request, urllib.parse, urllib.error, base64
 from random import sample
@@ -21,16 +20,15 @@ from bokeh.palettes import Blues4
 from bokeh.models import ColumnDataSource,Slider
 
 # import datetime
-from datetime import datetime
+from datetime import datetime, timedelta
 from bokeh.io import push_notebook
 from dateutil import parser
 from ipywidgets import interact, widgets, fixed
 
-
-apikey = '34442f5a16554d4eb8a6761c867d2f5a' 
+last_upload = datetime.now() 
+apikey = 'f45143c46a574480a01fb58f1998017c' 
 endpoint = 'https://eastus.api.cognitive.microsoft.com/anomalydetector/v1.0/timeseries/entire/detect'
-current_values = []
-last_upload = None
+
 def detect(endpoint, apikey, request_data):
     headers = {'Content-Type': 'application/json', 'Ocp-Apim-Subscription-Key': apikey}
     response = requests.post(endpoint, data=json.dumps(request_data), headers=headers)
@@ -91,14 +89,13 @@ def build_figure(sample_data, sensitivity,target):
   show(p, notebook_handle=True)
   return target
 
-
-
 def main(myblob: func.InputStream):
     logging.info(f"Python blob trigger function processed blob \n"
                  f"Name: {myblob.name}\n"
                  f"Blob Size: {myblob.length} bytes")
     
     var = myblob.read()
+    
     var = var.decode("utf-8") 
     var = var.split('\r\n')
     ls = []
@@ -128,6 +125,8 @@ def main(myblob: func.InputStream):
     
     # sorted(var_temp, key=lambda var_temp:var_temp["time"])
     #print(var_temp)
+
+
     #print(len(var))
 
     metric_ls_1 = []
@@ -164,12 +163,21 @@ def main(myblob: func.InputStream):
         metric_ls_2.append(sample_data)
 
 
-    current_values.append(metric_ls_2)
-    past = datetime.now() - timedelta(days=1)
+    # print(len(ls1))
+    # target = {
+    # "name":"insights-logs-appservicehttplogs",
+    # "data": 
+    #     {"anomalies":[],
+    #     "anomaly_labels" : [],
+    #     "anomaly_indexes" : []
+    #     }
+    # }
+
+    # print(sample_data)
+    current = datetime.now()
     global last_upload
 
-    if past > last_upload:
-
+    if current - timedelta(minutes = 5) >= last_upload:
         target = {
             "name":"insights-metrics-pt1m",
             "data" : []
@@ -186,10 +194,11 @@ def main(myblob: func.InputStream):
                 "anomalies" : result
                 }            
             )
+        print(target)
 
         url = "https://aiopsendpoint.azurewebsites.net/"#"http://192.168.68.107:5000/"#"https://aiopsendpoint.azurewebsites.net/"
         # response = requests.post(url, target)
         response = requests.post(url, json.dumps(target))
-        last_upload = datetime.now()
-
+        last_upload = current
+        print(response)
 
