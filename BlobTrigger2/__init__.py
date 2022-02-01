@@ -185,7 +185,7 @@ def main(myblob: func.InputStream):
             )
         print(target)
 
-        url = "http://192.168.68.107:5000/"#"http://192.168.68.107:5000/"#"https://aiopsendpoint.azurewebsites.net/"
+        url = "https://aiopsendpoint.azurewebsites.net/"#"http://192.168.68.107:5000/"#"https://aiopsendpoint.azurewebsites.net/"
         # response = requests.post(url, target)
         response = requests.post(url, json.dumps(target))
         last_upload = current
